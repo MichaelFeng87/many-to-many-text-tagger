@@ -7,7 +7,7 @@ from keras.layers.wrappers import TimeDistributed
 from keras.preprocessing.sequence import pad_sequences
 from keras.layers.embeddings import Embedding
 from sklearn.cross_validation import train_test_split
-from keras.layers import Merge
+from keras.layers import Bidirectional,Dropout
 from keras.backend import tf
 from lambdawithmask import Lambda as MaskLambda
 from sklearn.metrics import confusion_matrix, accuracy_score
@@ -87,26 +87,27 @@ out_size = len(label2ind) + 1
 
 
 
-def reverse_func(x, mask=None):
-    return tf.reverse(x, [False, True, False])
+# def reverse_func(x, mask=None):
+#     return tf.reverse(x, [False, True, False])
 
 
 checkpointer = ModelCheckpoint(filepath='keras_model/best_weight.hdf5',
                                    verbose=1,
                                    save_best_only=True)
 
-model_forward = Sequential()
-model_forward.add(Embedding(max_features, embedding_size, input_length=maxlen, mask_zero=True))
-model_forward.add(LSTM(hidden_size, return_sequences=True))  
+# model_forward = Sequential()
+# model_forward.add(Embedding(max_features, embedding_size, input_length=maxlen, mask_zero=True))
+# model_forward.add(LSTM(hidden_size, return_sequences=True))  
 
-model_backward = Sequential()
-model_backward.add(Embedding(max_features, embedding_size, input_length=maxlen, mask_zero=True))
-model_backward.add(LSTM(hidden_size, return_sequences=True))
-model_backward.add(MaskLambda(function=reverse_func, mask_function=reverse_func))
+# model_backward = Sequential()
+# model_backward.add(Embedding(max_features, embedding_size, input_length=maxlen, mask_zero=True))
+# model_backward.add(LSTM(hidden_size, return_sequences=True))
+# model_backward.add(MaskLambda(function=reverse_func, mask_function=reverse_func))
 
 model = Sequential()
-
-model.add(Merge([model_forward, model_backward], mode='concat'))
+model.add(Embedding(max_features, embedding_size, input_length=maxlen, mask_zero=True))
+model.add(Bidirectional(LSTM(hidden_size,return_sequences=True)))
+model.add(Dropout(0.5))
 model.add(TimeDistributed(Dense(2048)))
 model.add(Activation('relu'))
 model.add(TimeDistributed(Dense(2048)))
@@ -114,10 +115,10 @@ model.add(Activation('relu'))
 model.add(TimeDistributed(Dense(out_size)))
 model.add(Activation('softmax'))
 
-model.compile(loss='categorical_crossentropy', optimizer='adam',metrics=['accuracy'])
+model.compile(loss='categorical_crossentropy', optimizer='rmsprop',metrics=['accuracy'])
 
 batch_size = 5
-model.fit([X_train_f, X_train_b], y_train, batch_size=batch_size, nb_epoch=80,
-          validation_data=([X_test_f, X_test_b], y_test),callbacks=[checkpointer],shuffle=True)
-score = model.evaluate([X_test_f, X_test_b], y_test, batch_size=batch_size)
+model.fit(X_train_f, y_train, batch_size=batch_size, nb_epoch=80,
+          validation_data=(X_test_f, y_test),callbacks=[checkpointer],shuffle=True)
+score = model.evaluate(X_test_f, y_test, batch_size=batch_size)
 print('Raw test score:', score)
